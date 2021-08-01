@@ -12,19 +12,48 @@ import {
   Tbody,
   Td,
   Text,
+  Link,
   useBreakpointValue,
+  Spinner,
 } from "@chakra-ui/react";
-import Link from "next/link";
-import { RiAddLine, RiPencilLine } from "react-icons/ri";
+import { GetServerSideProps } from "next";
+import NextLink from "next/link";
+import { useState } from "react";
+import { RiAddLine } from "react-icons/ri";
 import { Header } from "../../components/Header";
 import { Pagination } from "../../components/Pagination";
 import { Sidebar } from "../../components/Sidebar";
+import { api } from "../../services/api";
+import {
+  getUsers,
+  useUsers,
+} from "../../services/hooks/useUsers";
+import { queryClient } from "../../services/queryClient";
 
-export default function UserList() {
+export default function UserList(/* { users } */) {
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error, isFetching } = useUsers(
+    page /* ,
+    {
+      initialData: users,
+    } */
+  );
+
   const isWideVersion = useBreakpointValue({
     base: false,
     lg: true,
   });
+
+  async function handlePrefetchUser(userId: string) {
+    await queryClient.prefetchQuery(
+      ["user", userId],
+      async () => {
+        const response = await api.get(`users/${userId}`);
+        return response.data;
+      },
+      { staleTime: 1000 * 60 * 10 }
+    );
+  }
 
   return (
     <Box>
@@ -47,9 +76,16 @@ export default function UserList() {
           >
             <Heading size="lg" fontWeight="normal">
               Usuários
+              {!isLoading && isFetching && (
+                <Spinner
+                  color="gray.500"
+                  size="sm"
+                  ml="4"
+                />
+              )}
             </Heading>
 
-            <Link href="/users/create" passHref>
+            <NextLink href="/users/create" passHref>
               <Button
                 as="a"
                 size="sm"
@@ -61,54 +97,100 @@ export default function UserList() {
               >
                 Novo
               </Button>
-            </Link>
+            </NextLink>
           </Flex>
 
-          <Table colorScheme="whiteAlpha">
-            <Thead>
-              <Tr>
-                <Th
-                  px={["4", "4", "6"]}
-                  color="gray.300"
-                  width="8"
-                >
-                  <Checkbox colorScheme="pink" />
-                </Th>
+          {isLoading ? (
+            <Flex justify="center">
+              <Spinner color="pink.500" />
+            </Flex>
+          ) : error ? (
+            <Flex justify="center">
+              <Text>
+                Falha ao obter dados dos usuários.
+              </Text>
+            </Flex>
+          ) : (
+            <>
+              <Table colorScheme="whiteAlpha">
+                <Thead>
+                  <Tr>
+                    <Th
+                      px={["4", "4", "6"]}
+                      color="gray.300"
+                      width="8"
+                    >
+                      <Checkbox colorScheme="pink" />
+                    </Th>
 
-                <Th>Usuário</Th>
+                    <Th>Usuário</Th>
 
-                {isWideVersion && <Th>Data de cadastro</Th>}
-              </Tr>
-            </Thead>
+                    {isWideVersion && (
+                      <Th>Data de cadastro</Th>
+                    )}
+                  </Tr>
+                </Thead>
 
-            <Tbody>
-              <Tr>
-                <Td px={["4", "4", "6"]}>
-                  <Checkbox colorScheme="pink" />
-                </Td>
+                <Tbody>
+                  {data.users.map((user) => {
+                    return (
+                      <Tr key={user.id}>
+                        <Td px={["4", "4", "6"]}>
+                          <Checkbox colorScheme="pink" />
+                        </Td>
 
-                <Td>
-                  <Box>
-                    <Text fontWeight="bold">
-                      Abigail Arruda
-                    </Text>
+                        <Td>
+                          <Box>
+                            <Link
+                              color="pink.500"
+                              onMouseEnter={() =>
+                                handlePrefetchUser(user.id)
+                              }
+                            >
+                              <Text fontWeight="bold">
+                                {user.name}
+                              </Text>
+                            </Link>
 
-                    <Text fontSize="small" color="gray.300">
-                      abigail@gmail.com
-                    </Text>
-                  </Box>
-                </Td>
+                            <Text
+                              fontSize="small"
+                              color="gray.300"
+                            >
+                              {user.email}
+                            </Text>
+                          </Box>
+                        </Td>
 
-                {isWideVersion && (
-                  <Td>01 de Julho, 2021</Td>
-                )}
-              </Tr>
-            </Tbody>
-          </Table>
+                        {isWideVersion && (
+                          <Td>{user.createdAt}</Td>
+                        )}
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
 
-          <Pagination />
+              <Pagination
+                totalCountOfRegisters={data.totalCount}
+                currentPage={page}
+                onPageChange={setPage}
+              />
+            </>
+          )}
         </Box>
       </Flex>
     </Box>
   );
 }
+
+// export const getServerSideProps: GetServerSideProps =
+//   async () => {
+//     const { users, totalCount } = await getUsers(1);
+
+//     return {
+//       props: {
+//         users,
+//         totalCount,
+//       },
+//     };
+//   };
